@@ -4,7 +4,7 @@
 # then ShapeA is considered to reference both ShapeB and ShapeC.
 # Similarly, if OperationA references ShapeA, then OperationA is considered to reference
 # ShapeA, ShapeB, and ShapeC.
-# If any shape is not referenced by any operation or other shape, it is removed from the JSON file.
+# If any shape is not referenced by any operation or other shape, it is marked unsupported using isNtnxSupported tag.
 #
 
 # Use --dry-run to only report the unreferenced shapes without removing them.
@@ -42,6 +42,8 @@ operations = data.get("operations", {})
 # Build reverse dependency graph: child -> [parents] for shapes references in other shapes
 reverse_refs = defaultdict(set)
 for parent, val in shapes.items():
+    if val.get("isNtnxSupported", True) is False:
+        continue
     t = val.get("type")
     if t == "structure":
         for member in val.get("members", {}).values():
@@ -60,7 +62,9 @@ for parent, val in shapes.items():
 shape_ref_count = {}
 op_ref_count = {}
 shapes_to_remove = []
-for shape_key in shapes:
+for shape_key, shape_val in shapes.items():
+    if shape_val.get("isNtnxSupported", True) is False:
+        continue
     visited = set()
     q = deque([shape_key])
     while q:
@@ -77,6 +81,8 @@ for shape_key in shapes:
     # Find operations referencing this shape or any of its ancestors
     op_dependencies = set()
     for op_name, op_data in operations.items():
+        if op_data.get("isNtnxSupported", True) is False:
+            continue
         if op_data.get("input", {}).get("shape") in visited:
             op_dependencies.add(op_name)
         if op_data.get("output", {}).get("shape") in visited:
@@ -103,7 +109,7 @@ if dry_run:
 # Remove unreferenced shapes from the original data
 for shape in shapes_to_remove:
     if shape in data["shapes"]:
-        del data["shapes"][shape]
+        data["shapes"][shape]["isNtnxSupported"] = False
 
 # Write the updated data
 with open(output_path, "w") as f:
